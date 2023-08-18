@@ -3,7 +3,7 @@
 
 #include <torch/extension.h>
 #include <cuda_runtime.h>
-// #include <ATen/cuda/CUDAContext.h>
+#include <ATen/cuda/CUDAContext.h>
 #include <math.h>
 
 #define TRY(call)\
@@ -24,7 +24,7 @@
     (block_loc+blockX) * blockDim.x + thread_loc
 
 #define LOCSAMP(h,w,dim) \
-    (((((b*num_heads)+head_num)*height)+h)*width+w)*num_dims+dim
+    (((b*height)+h)*width+w)*num_dims+dim
     // (((blockZ*height)+h)*width+w)*num_dims+dim
 // template <typename scalar_t>
 // __global__ void VSAttn_gpu_kernel_forward(
@@ -81,7 +81,7 @@ __device__ scalar_t bilinear(
 
 template <typename scalar_t> 
 __global__ void VSAttn_gpu_kernel_forward(
-    // at::cuda::CUDAStream stream,
+    at::cuda::CUDAStream stream,
     const scalar_t *q,
     const scalar_t *k,
     const scalar_t *v,
@@ -108,11 +108,19 @@ __global__ void VSAttn_gpu_kernel_forward(
     // const int cur_batch_size = blockIdx.z;
     // const int cur_num_window = blockIdx.y;
 
-    const int block_loc = gridDim.y * gridDim.x * blockIdx.z + gridDim.x * blockIdx.y;
+    const int block_loc = gridDim.x * blockIdx.y;
     const int blockX = blockIdx.x;
     const int thread_loc = threadIdx.x;
+    // const int head_num = thread_loc / dim;
+    // const int dim_num = thread_loc % dim;
+
     
     q_shared[thread_loc] = q[LOC(blockX,thread_loc)];
+
+    // for(int i=0;i<num_heads*ws*ws*2;i+=dim)
+    //     if(thread_loc + i < num_heads*ws*ws*2)
+    //         sampling_matrix_shared[(thread_loc+i*dim)/(ws*ws*2)][((thread_loc+i*dim)%(ws*ws*2))/2][(thread_loc+i*dim)%2] = sampling_matrix[block_loc+thread_loc+i*dim]
+    
     if(thread_loc < ws2)
     {
         sampling_matrix_shared[thread_loc][0] = sampling_matrix[LOCDIM(thread_loc,0,2)];
@@ -229,13 +237,13 @@ __device__ scalar_t bilinear(
 
     scalar_t v1 = 0.0, v2 = 0.0, v3 = 0.0, v4 = 0.0;
 
-    // [b,num_heads,_h,_w,dim]
+    // [_h,_w,dim]
 
-    int b = blockIdx.z / (h_num_windows*w_num_windows);
     // blockIdx girdDim
-    int head_num = blockIdx.y;
-    int num_heads = gridDim.y;
-    // printf("%d,%d,%d,%d",,height,width)
+
+    int num_heads = gridDim.y / (h_num_windows * w_num_windows);
+    int head_num = blockIdx.y % num_heads;
+    int b = head_num;
     
     if (0 <= h_low && h_low <= height - 1 && 0 <= w_low && w_low <= height - 1)
         v1 = data[LOCSAMP(h_low,w_low,dim)];

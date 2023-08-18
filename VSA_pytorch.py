@@ -19,8 +19,8 @@ def VSA_QK_torch(q, k, v, ws, attn_scale, sampling_matrix):
                     grid=sampling_matrix.reshape(num_predict_total, h, w, 2), padding_mode='zeros', align_corners=True
                     ).reshape(b*num_heads, out_dim // num_heads, h, w)
     v = v_selected.reshape(b, num_heads, out_dim // num_heads, window_num_h, ws, window_num_w, ws).permute(0, 3, 5, 1, 4, 6, 2).reshape(b*window_num_h*window_num_w, num_heads, ws*ws, out_dim//num_heads)
-    attn = dots.softmax(dim=-1)
-    output = attn @ v
+    # attn = dots.softmax(dim=-1)
+    output = dots @ v
     return dots, output
 
 def VSA_Attn(q, k, v, ws, attn_scale, sampling_offsets, sampling_scales, relative_position_bias, base_coords):

@@ -11,7 +11,7 @@ from VSA_pytorch import VSA_QK_torch
 from VSA_cuda import VSAttnFunction
 
 
-b, num_heads, per_head_dim, h, w = 4,16,64,56,56
+b, num_heads, per_head_dim, h, w = 16,16,64,56,56
 ws = 7
 
 def generate_base_coords(h,w,ws):
@@ -146,21 +146,21 @@ def test_cuda():
 
     for i in range(100):
 
-        cuda_start_time = time.time()
-        output_cuda = VSAttn.forward(q,k,v,sampling_matrix,ws,attn_scale)
-        torch.cuda.synchronize()
-        cuda_end_time = time.time()
 
         torch_start_time = time.time()
         attn, output = VSA_QK_torch(q,k,v,ws,attn_scale,sampling_matrix)
         torch.cuda.synchronize()
         torch_end_time = time.time()
-    
+
+        cuda_start_time = time.time()
+        output_cuda = VSAttn.forward(q,k,v,sampling_matrix,ws,attn_scale)
+        torch.cuda.synchronize()
+        cuda_end_time = time.time()
 
 
         time.sleep(0.01)
         # a = output_cuda+1
-        if i > 1:
+        if i > 10:
             cuda_compute_time += cuda_end_time - cuda_start_time
             torch_compute_time += torch_end_time - torch_start_time
         # if i % 10 == 0:
@@ -210,4 +210,4 @@ def test_eq():
 # test_taichi()
 # test_torch()
 test_cuda()
-# test_eq()
+test_eq()

@@ -21,13 +21,22 @@ torch::Tensor VSAttn_kernel_forward(
     int h_num_windows = h / ws;
     int w_num_windows = w / ws;
 
-    q = q.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws}).permute({0,3,5,1,4,6,2});
+    q = q.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws}).permute({0,3,5,1,4,6,2}).reshape({-1});
     k = k.permute({0,1,3,4,2}).reshape({-1});
     v = v.permute({0,1,3,4,2}).reshape({-1});
+    sampling_matrix = sampling_matrix.reshape({batch_size, num_heads, h_num_windows, ws, w_num_windows, ws, 2}).permute({0,2,4,1,3,5,6}).reshape({-1});
+    auto output = torch::zeros_like(q).reshape({batch_size*h_num_windows*w_num_windows, num_heads, ws*ws, per_head_dim});
+
+    // q = q.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws}).permute({0,3,5,4,6,1,2}).reshape({-1});
+    // k = k.permute({0,3,4,1,2}).reshape({-1});
+    // v = v.permute({0,3,4,1,2}).reshape({-1});
+    // sampling_matrix = sampling_matrix.reshape({batch_size, num_heads, h_num_windows, ws, w_num_windows, ws, 2}).permute({0,2,4,3,5,1,6}).reshape({-1});
+    // auto output = torch::zeros_like(q).reshape({batch_size*h_num_windows*w_num_windows,  ws*ws, num_heads, per_head_dim});
+    
+
     // k = k.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws}).permute({0,1,3,5,4,6,2}).reshape({-1});
     // v = v.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws}).permute({0,1,3,5,4,6,2}).reshape({-1});
 
-    sampling_matrix = sampling_matrix.reshape({batch_size, num_heads, h_num_windows, ws, w_num_windows, ws, 2}).permute({0,2,4,1,3,5,6}).reshape({-1});
     // auto k1 = k.reshape({batch_size, num_heads, per_head_dim, h_num_windows, ws, w_num_windows, ws});
     // auto k2 = k1.permute({0,1,3,5,4,6,2});
     // auto k3 = k2.reshape({batch_size, num_heads*h_num_windows*w_num_windows, ws*ws, per_head_dim});
@@ -37,14 +46,11 @@ torch::Tensor VSAttn_kernel_forward(
     // auto v3 = v2.reshape({batch_size, num_heads*h_num_windows*w_num_windows, ws*ws, per_head_dim});
 
     // auto k = k.reshape({});
-    auto output = torch::zeros_like(q).reshape({batch_size*h_num_windows*w_num_windows, num_heads, ws*ws, per_head_dim});
-
-    q = q.reshape({-1});
 
 
-    auto block = dim3(ws*ws,num_heads,batch_size*h_num_windows*w_num_windows);
+    auto block = dim3(ws*ws, h_num_windows*w_num_windows*num_heads);
     auto thread = dim3(per_head_dim);
-    // auto stream = at::cuda::getCurrentCUDAStream();
+
 
     // TORCH_CHECK(q1.dim() == 4, "");
     // TORCH_CHECK(k3.dim() == 4, "");
@@ -58,18 +64,23 @@ torch::Tensor VSAttn_kernel_forward(
     // auto q_ptr = q.data_ptr<float>();
     // auto b = q.is_contiguous();
 
-    AT_DISPATCH_FLOATING_TYPES(q.scalar_type(), "need float types", ([&] {
-        VSAttn_gpu_kernel_forward<scalar_t><<<block,thread>>>(
-            // stream,
-            q.data_ptr<scalar_t>(),
-            k.data_ptr<scalar_t>(),
-            v.data_ptr<scalar_t>(),
-            output.data_ptr<scalar_t>(),
-            sampling_matrix.data_ptr<scalar_t>(),
-            ws, per_head_dim, num_heads, h_num_windows, w_num_windows, batch_size,
-            attn_scale
-        );
-    }));
+    for(int i=0;i<batch_size;i++)
+    {
+        auto stream = at::cuda::getCurrentCUDAStream();
+        AT_DISPATCH_FLOATING_TYPES(q.scalar_type(), "need float types", ([&] {
+            VSAttn_gpu_kernel_forward<scalar_t><<<block,thread,0,stream>>>(
+                stream,
+                q.data_ptr<scalar_t>() + i * h_num_windows*w_num_windows*num_heads * ws*ws * per_head_dim,
+                k.data_ptr<scalar_t>() + i * num_heads * h * w * per_head_dim,
+                v.data_ptr<scalar_t>() + i * num_heads * h * w * per_head_dim,
+                output.data_ptr<scalar_t>() + i * h_num_windows*w_num_windows*num_heads * ws*ws * per_head_dim,
+                sampling_matrix.data_ptr<scalar_t>() + i * h_num_windows*w_num_windows*num_heads * ws*ws * 2,
+                ws, per_head_dim, num_heads, h_num_windows, w_num_windows, batch_size,
+                attn_scale
+            );
+        }));
+    }
+
     // batch_size, num_heads,  h_num_windows, w_num_windows, ws, ws, per_head_dim
     // AT_DISPATCH_FLOATING_TYPES(q.scalar_type(), "need float types", ([&] {
     //     VSAttn_gpu_kernel_forward<scalar_t><<<block,thread,0,stream>>>(
