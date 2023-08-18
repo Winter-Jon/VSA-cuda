@@ -1,3 +1,9 @@
+build
+__pycache__
+
+*.nsys-rep
+*.ncu-rep
+
 # Prerequisites
 *.d
 

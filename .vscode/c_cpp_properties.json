@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/vsa/include",
+                "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/include/",
+                "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/include/python3.9",
+                "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/lib/python3.9/site-packages/torch/include",
+                "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/lib/python3.9/site-packages/torch/include/torch/csrc/api/include"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}
