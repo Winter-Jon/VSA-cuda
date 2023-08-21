@@ -14,10 +14,11 @@ def VSA_QK_taichi(
     q_b, q_num_heads, q_per_head_dim, q_h, q_w = q.shape
     t_b, t_num_windows_h, t_num_windows_w, t_num_heads, t_q_ws2, t_sp_ws2 = output.shape
     
-    for b, num_windows_h, num_windows_w, num_heads, q_ws2, sp_ws2, dim in ti.ndrange(t_b, t_num_windows_h, t_num_windows_w, t_num_heads, t_q_ws2, t_sp_ws2, q_per_head_dim):
-        output[b, num_windows_h, num_windows_w, num_heads, q_ws2, sp_ws2] \
-        += q[b, num_heads, dim, num_windows_h*ws+q_ws2//ws, num_windows_w*ws+q_ws2%ws] \
-        *  bilinear(k, sampling_matrix, b, num_heads, dim, num_windows_h, num_windows_w, ws, sp_ws2) * attn_scale
+    for b, num_windows_h, num_windows_w, num_heads, q_ws2, sp_ws2 in output:
+        for dim in ti.ndrange(q_per_head_dim):
+            output[b, num_windows_h, num_windows_w, num_heads, q_ws2, sp_ws2] \
+            += q[b, num_heads, dim, num_windows_h*ws+q_ws2//ws, num_windows_w*ws+q_ws2%ws] \
+            *  bilinear(k, sampling_matrix, b, num_heads, dim, num_windows_h, num_windows_w, ws, sp_ws2) * attn_scale
 
 
 @ti.kernel
@@ -29,13 +30,14 @@ def VSA_Attn_taichi(
     sampling_matrix: ti.types.ndarray(),
     output: ti.types.ndarray()
 ):
-    a_b, a_num_windows_h, a_num_windows_w, a_num_heads, a_ws2, dim_ws2 = attn.shape
+    a_b, a_num_windows_h, a_num_windows_w, a_num_heads, aa_ws2, dim_ws2 = attn.shape
     t_b, t_num_windows_h, t_num_windows_w, t_num_heads, t_q_ws2, t_per_head_dim = output.shape
 
-    for b, num_windows_h, num_windows_w, num_heads, a_ws2, head_dim, dim in ti.ndrange(t_b, t_num_windows_h, t_num_windows_w, t_num_heads, t_q_ws2, t_per_head_dim ,dim_ws2):
-        output[b, num_windows_h, num_windows_w, num_heads, a_ws2, head_dim] \
-        += attn[b, num_windows_h, num_windows_w, num_heads, a_ws2, dim] \
-        *  bilinear(v, sampling_matrix, b, num_heads, head_dim, num_windows_h, num_windows_w, ws, dim) * attn_scale
+    for b, num_windows_h, num_windows_w, num_heads, a_ws2, head_dim in output:
+        for dim in ti.ndrange(dim_ws2):
+            output[b, num_windows_h, num_windows_w, num_heads, a_ws2, head_dim] \
+            += attn[b, num_windows_h, num_windows_w, num_heads, a_ws2, dim]\
+            *  bilinear(v, sampling_matrix, b, num_heads, head_dim, num_windows_h, num_windows_w, ws, dim)
 
 
 @ti.func
