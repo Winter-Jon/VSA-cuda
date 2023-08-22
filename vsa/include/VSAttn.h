@@ -13,7 +13,7 @@ torch::Tensor VSAttn_forward(
     torch::Tensor &v,
     torch::Tensor &sampling_matrix,
     const int ws,
-    const float attn_scale
+    const double attn_scale
 );
 
 #endif

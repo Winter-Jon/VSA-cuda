@@ -8,7 +8,7 @@ torch::Tensor VSAttn_forward(
     torch::Tensor &v,
     torch::Tensor &sampling_matrix,
     const int ws,
-    const float attn_scale
+    const double attn_scale
 )
 {
     // auto a = q.is_contiguous();
@@ -24,7 +24,7 @@ std::vector<torch::Tensor> VSAttn_backward(
     torch::Tensor &sampling_matrix,
     torch::Tensor &grad_output,
     const int ws,
-    const float attn_scale
+    const double attn_scale
 )
 {
     // T_CHECK(q);T_CHECK(k);T_CHECK(v);T_CHECK(sampling_matrix);T_CHECK(grad_output);

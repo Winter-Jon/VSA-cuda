@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/vsa/include",
+                "/data/users/jiangwentao/usr/bin/cuda-12.2/lib64",
                 "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/include/",
                 "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/include/python3.9",
                 "/data/users/jiangwentao/Apps/miniconda3/envs/cuda/lib/python3.9/site-packages/torch/include",

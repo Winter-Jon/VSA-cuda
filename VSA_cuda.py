@@ -2,7 +2,6 @@ from typing import Any
 import torch
 import os
 from torch.utils.cpp_extension import load
-import nvtx
 
 if not os.path.exists("build"):
     os.mkdir("build")

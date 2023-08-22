@@ -72,8 +72,9 @@ __device__ scalar_t bilinear(
     const scalar_t *data,
     const scalar_t _h,
     const scalar_t _w,
-    const int dim,
+    int dim,
     const int num_dims,
+    const int num_heads,
     const int ws,
     const int h_num_windows,
     const int w_num_windows
@@ -88,13 +89,15 @@ __global__ void VSAttn_gpu_kernel_forward(
     scalar_t *output,
     const scalar_t *sampling_matrix,
     const int ws, const int dim, const int num_heads, const int h_num_windows, const int w_num_windows, const int batch_size,
-    const float attn_scale
+    const double attn_scale
 ){
     const int ws2 = ws*ws;
+    // __shared__ scalar_t q_shared[16][64];
+    // __shared__ scalar_t sampling_matrix_shared[16][49][2];
+    // __shared__ scalar_t attn_shared[16][49];
+
     __shared__ scalar_t q_shared[64];
     __shared__ scalar_t sampling_matrix_shared[49][2];
-    // __shared__ float k_s[64];
-    // __shared__ float v_s[64];
     __shared__ scalar_t attn_shared[49];
     scalar_t attn_temp = 0;
     // __shared__ float q_shared[64][64];
@@ -115,12 +118,13 @@ __global__ void VSAttn_gpu_kernel_forward(
     // const int dim_num = thread_loc % dim;
 
     
-    q_shared[thread_loc] = q[LOC(blockX,thread_loc)];
+    // q_shared[head_num][dim_num] = q[LOC(blockX,thread_loc)];
 
-    // for(int i=0;i<num_heads*ws*ws*2;i+=dim)
-    //     if(thread_loc + i < num_heads*ws*ws*2)
-    //         sampling_matrix_shared[(thread_loc+i*dim)/(ws*ws*2)][((thread_loc+i*dim)%(ws*ws*2))/2][(thread_loc+i*dim)%2] = sampling_matrix[block_loc+thread_loc+i*dim]
+    // for(int i=0;i<num_heads*ws*ws*2;i+=blockDim.x)
+    //     if(thread_loc + i * blockDim.x < num_heads*ws*ws*2)
+    //         sampling_matrix_shared[(thread_loc+i*blockDim.x)/(ws*ws*2)][((thread_loc+i*blockDim.x)%(ws*ws*2))/2][(thread_loc+i*blockDim.x)%2] = sampling_matrix[block_loc+thread_loc+i*blockDim.x];
     
+
     if(thread_loc < ws2)
     {
         sampling_matrix_shared[thread_loc][0] = sampling_matrix[LOCDIM(thread_loc,0,2)];
@@ -129,30 +133,37 @@ __global__ void VSAttn_gpu_kernel_forward(
 
     __syncthreads();
 
-
-    if(thread_loc < ws2)
-    {
-        for(int i=0;i<dim;++i)
-        {
-            attn_temp += q_shared[i] * attn_scale 
-                * bilinear(k,sampling_matrix_shared[thread_loc][1],sampling_matrix_shared[thread_loc][0],i,dim,ws,h_num_windows,w_num_windows);
-            // k[LOC(thread_loc,i)];
-            // if(LOCDIM(blockX,thread_loc,ws2) == 0)
-            //     printf("attn[%d][%d]+=q[%d][%d]*k[%d][%d]\n",blockX,thread_loc,blockX,i,thread_loc,i);
-        }
-        attn_shared[thread_loc] = attn_temp;
-    }
-
-
-    __syncthreads();
     scalar_t out = 0;
     for(int i=0;i<ws2;++i)
     {
         out += attn_shared[i] 
-            * bilinear(v,sampling_matrix_shared[i][1],sampling_matrix_shared[i][0],thread_loc,dim,ws,h_num_windows,w_num_windows);
-        // v[LOC(i,thread_loc)];
+            * bilinear(v,sampling_matrix_shared[i][1],sampling_matrix_shared[i][0],thread_loc,dim,num_heads,ws,h_num_windows,w_num_windows);
     }
     output[LOC(blockX,thread_loc)] = out;
+
+    // if(thread_loc < ws2)
+    // {
+    //     for(int i=0;i<dim;++i)
+    //     {
+    //         attn_temp += q_shared[i] * attn_scale 
+    //             * bilinear(k,sampling_matrix_shared[thread_loc][1],sampling_matrix_shared[thread_loc][0],i,dim,ws,h_num_windows,w_num_windows);
+    //     }
+    //     attn_shared[thread_loc] = attn_temp;
+    // }
+
+    // if(thread_loc < ws2*num_heads)
+    // {
+    //     for(int i=0;i<dim;++i)
+    //     {
+    //         attn_temp += q_shared[thread_loc/ws2][i] * attn_scale 
+    //             * bilinear(k,sampling_matrix_shared[thread_loc/ws2][thread_loc%ws][1],sampling_matrix_shared[thread_loc/ws2][thread_loc%ws][0],i,dim,num_heads,ws,h_num_windows,w_num_windows);
+    //     }
+    //     attn_shared[thread_loc/ws2][thread_loc] = attn_temp; 
+    // }
+
+
+
+
     
 }
 
@@ -210,8 +221,9 @@ __device__ scalar_t bilinear(
     const scalar_t *data,
     const scalar_t _h,
     const scalar_t _w,
-    const int dim,
+    int dim,
     const int num_dims,
+    const int num_heads,
     const int ws,
     const int h_num_windows,
     const int w_num_windows
@@ -241,9 +253,9 @@ __device__ scalar_t bilinear(
 
     // blockIdx girdDim
 
-    int num_heads = gridDim.y / (h_num_windows * w_num_windows);
-    int head_num = blockIdx.y % num_heads;
-    int b = head_num;
+    // int num_heads = gridDim.y / (h_num_windows * w_num_windows);
+    // int head_num = blockIdx.y % num_heads;
+    int b = 0;
     
     if (0 <= h_low && h_low <= height - 1 && 0 <= w_low && w_low <= height - 1)
         v1 = data[LOCSAMP(h_low,w_low,dim)];

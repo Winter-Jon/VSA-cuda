@@ -4,12 +4,11 @@ import os
 import torch 
 import torch.nn as nn
 
-import nvtx
-
 from VSA_pytorch import VSA_QK_torch
 # from VSA_taichi import VSA_QK_taichi, VSA_Attn_taichi
 from VSA_cuda import VSAttnFunction
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 b, num_heads, per_head_dim, h, w = 16,16,64,56,56
 ws = 7
@@ -76,14 +75,15 @@ def test_taichi():
     sampling_scale = torch.randn(b, num_heads*2, num_windows_h, num_windows_w, device="cuda") / 3
 
     sampling_matrix = generate_sampling_matrix(q, ws, base_coords, sampling_offset, sampling_scale).contiguous()
-    attn = torch.empty(b, num_windows_h, num_windows_w, num_heads, ws*ws, ws*ws, device="cuda").contiguous()
-    output = torch.zeros(b, num_windows_h, num_windows_w, num_heads, ws*ws, ws*ws, device="cuda").contiguous()
-    
-    for i in range(100):
-        o = output.clone()
+    attn_taichi = torch.zeros(b, num_windows_h, num_windows_w, num_heads, ws*ws, ws*ws, device="cuda").contiguous()
+    output_taichi = torch.zeros(b, num_windows_h, num_windows_w, num_heads, ws*ws, per_head_dim, device="cuda").contiguous()
+
+    for i in range(400):
         start_time = time.time()
-        VSA_QK_taichi(q,k,ws,attn_scale,sampling_matrix,attn)
-        VSA_Attn_taichi(attn,v,ws,1.0,sampling_matrix,output)
+        VSA_QK_taichi(q,k,ws,attn_scale,sampling_matrix,attn_taichi)
+        VSA_Attn_taichi(attn_taichi,v,ws,attn_scale,sampling_matrix,output_taichi)
+        if i == 199:
+            torch.cuda.synchronize()
         end_time = time.time()
         iter_compute_time = end_time - start_time
         compute_time += iter_compute_time
@@ -91,7 +91,6 @@ def test_taichi():
         if i % 10 == 0:
             print("iter:",i, " time:", iter_compute_time.__format__(".3e"))
     
-    print(output.shape)
     print("time:", compute_time)
 
 
@@ -112,7 +111,7 @@ def test_torch():
 
     sampling_matrix = generate_sampling_matrix(q, ws, base_coords, sampling_offset, sampling_scale).contiguous()
 
-    for i in range(100):
+    for i in range(400):
         start_time = time.time()
         attn, output = VSA_QK_torch(q,k,v,ws,attn_scale,sampling_matrix)
         end_time = time.time()
@@ -158,7 +157,6 @@ def test_cuda():
         cuda_end_time = time.time()
 
 
-        time.sleep(0.01)
         # a = output_cuda+1
         if i > 10:
             cuda_compute_time += cuda_end_time - cuda_start_time
@@ -191,10 +189,10 @@ def test_eq():
 
         attn_torch, output_torch = VSA_QK_torch(q,k,v,ws,attn_scale,sampling_matrix)
 
-        # attn_taichi = torch.empty(b, num_windows_h, num_windows_w, num_heads, ws*ws, ws*ws, device="cuda").contiguous()
-        # output_taichi = torch.empty(b, num_windows_h, num_windows_w, num_heads, ws*ws, per_head_dim, device="cuda").contiguous()
+        # attn_taichi = torch.zeros(b, num_windows_h, num_windows_w, num_heads, ws*ws, ws*ws, device="cuda").contiguous()
+        # output_taichi = torch.zeros(b, num_windows_h, num_windows_w, num_heads, ws*ws, per_head_dim, device="cuda").contiguous()
         # VSA_QK_taichi(q,k,ws,attn_scale,sampling_matrix,attn_taichi)
-        # VSA_Attn_taichi(attn_taichi,v,ws,1.0,sampling_matrix,output_taichi)
+        # VSA_Attn_taichi(attn_taichi,v,ws,attn_scale,sampling_matrix,output_taichi)
 
         # output_attn = attn_taichi.view(-1) - attn_torch.view(-1)
         # output = output_taichi.view(-1) - output_torch.view(-1)
@@ -202,8 +200,11 @@ def test_eq():
         VSAttn = VSAttnFunction()
         output_cuda = VSAttn.forward(q,k,v,sampling_matrix,ws,attn_scale)
 
-        output = output_cuda- output_torch
 
+
+        output = output_cuda.transpose(2,1) - output_torch
+
+        # print(torch.sum(torch.abs(output_attn)))
         print(torch.sum(torch.abs(output)))
 
 

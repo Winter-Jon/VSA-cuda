@@ -15,7 +15,7 @@ torch::Tensor VSAttn_kernel_forward(
     torch::Tensor &v,
     torch::Tensor &sampling_matrix,
     const int ws,
-    const float attn_scale
+    const double attn_scale
 );
 
 
@@ -26,7 +26,7 @@ std::vector<torch::Tensor> VSAttn_kernel_backward(
     torch::Tensor sampling_matrix,
     torch::Tensor grad_output,
     const int ws,
-    const float attn_scale
+    const double attn_scale
 );
 
 
