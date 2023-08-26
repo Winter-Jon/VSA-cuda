@@ -4,13 +4,15 @@ import os
 import torch 
 import torch.nn as nn
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
 from VSA_pytorch import VSA_QK_torch
 # from VSA_taichi import VSA_QK_taichi, VSA_Attn_taichi
 from VSA_cuda import VSAttnFunction
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
-b, num_heads, per_head_dim, h, w = 16,16,64,56,56
+
+b, num_heads, per_head_dim, h, w = 1,16,64,56,56
 ws = 7
 
 def generate_base_coords(h,w,ws):
@@ -202,13 +204,12 @@ def test_eq():
 
 
 
-        output = output_cuda.transpose(2,1) - output_torch
+        output = output_cuda - output_torch
 
         # print(torch.sum(torch.abs(output_attn)))
         print(torch.sum(torch.abs(output)))
 
-
+test_eq()
 # test_taichi()
 # test_torch()
 test_cuda()
-test_eq()
